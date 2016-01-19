@@ -1,5 +1,6 @@
 .idea
 *.py[cod]
+test/test_config.cfg
 
 # C extensions
 *.so

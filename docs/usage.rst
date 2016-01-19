@@ -3,25 +3,60 @@ Usage
 ========
 
 Currently this uses the sparkcontext addPyFile method to ship this method to the workers.
+Additionally to prevent the interference of the initial import of sparkonda with pyspark cloudpickle, the user needs to
+
 
 To ship and install a conda environment the following steps are needed:
 
 .. code-block:: python
 
-    # create a new conda env to test with if you don't have one:
-    # conda create -n sparkonda-test python pandas scikit-learn
+    # Create a new conda env to test with if you don't have one:
+    conda create -n sparkonda-test-env python=2.7 pip pandas scikit-learn numpy
+    source activate sparkonda-test-env
+    pip install sparkonda
+    ###########################################################
+    ###########################################################
+    ###########################################################
 
-    #Add the sparkonda file to the cluster workers
-    sc.addPyFile('sparkonda/sparkonda/sparkonda.py')
+    #Declare these two helper functions to help with sys.modules cache manipulations
+    #and to add the sparkonda_utils.py file to the pyspark workers SparkFiles
+    def add_sparkonda_utils_to_workers(sc):
+        # Helper to add sparkonda_utils module to the workers
+        # and clean up the sys.modules cache afterward
+        import sparkonda
+        sparkonda.module_helper.add_module_to_workers(sc)
 
-    import sparkonda as skon
+    def import_sparkonda_utils():
+        # Helper to import the sparkonda_utils module
+        # Try-Catch trick used for IDEs, to provide autocomplete
+        try:
+            import sparkonda_utils as skon
+        except ImportError:
+            import sparkonda.sparkonda_utils as skon
+        return skon
+
+    ###########################################################
+    # In the following example sc represents a running pyspark context
+    # Please see the tests folder for examples
+    ###########################################################
+
+    add_sparkonda_utils_to_workers(sc)
+    skon = import_sparkonda_utils()
+    #Make sure that the skon module points to the SparkFile
+    #and not to the local sparkonda installation
+    skon.__file__
+
+    ###########################################################
+    ###########################################################
+    #Configure your skon object and use it to deploy your conda env to
+    #the spark workers
     from os.path import expanduser
     home_dir = expanduser("~")
 
     #Edit to match your conda env name
-    skon.CONDA_ENV_NAME = 'sparkonda-test'
+    skon.CONDA_ENV_NAME = 'sparkonda-test-env'
     #Edit this path to match your conda env location
-    skon.CONDA_ENV_LOCATION = home_dir+'/miniconda/envs/'+skon.CONDA_ENV_NAME
+    skon.CONDA_ENV_LOCATION = ''.join([home_dir,'/miniconda/envs/',skon.CONDA_ENV_NAME])
     #Edit to match your cluster size
     skon.SC_NUM_EXECUTORS = 2
 
@@ -32,11 +67,11 @@ To ship and install a conda environment the following steps are needed:
     skon.set_workers_python_interpreter(sc)
 
     #This assumes that pandas and sklearn are installed in the conda env you specified
-    def d(x): import pandas as pd; return pd.__version__
-    sc.parallelize([1]).map(d).collect()
+    def check_pandas(x): import pandas as pd; return [pd.__version__]
+    prun(sc, check_pandas, include_broadcast_vars=False)
 
-    def d(x): import sklearn as sk; return sk.__version__
-    sc.parallelize([1]).map(d).collect()
+    def check_sklearn(x): import sklearn as sk; return sk.__version__
+    prun(sc, check_sklearn, include_broadcast_vars=False)
 
 To remove the custom conda env from the workers and reset the interpreter:
 
@@ -46,10 +81,10 @@ To remove the custom conda env from the workers and reset the interpreter:
 
     skon.list_cwd_files(sc)
 
-    sc.parallelize([1]).map(lambda x: x+1).collect()
+    skon.reset_workers_python_interpreter(sc)
 
-    #Check that the package is not accessible anymore(should get an error)
-    #ImportError: No module named sklearn
-    def d(x): import sklearn as sk; return sk.__version__
-
-    sc.parallelize([1]).map(d).collect()
+    #Check that the package is not accessible anymore
+    #User should get an ImportErrror:
+    #   ImportError: No module named sklearn
+    def check_sklearn(x): import sklearn as sk; return sk.__version__
+    prun(sc, check_sklearn, include_broadcast_vars=False)

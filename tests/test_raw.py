@@ -1,7 +1,8 @@
-# create a new conda env to test with if you don't have one:
-# conda create -n sparkonda-test python pandas scikit-learn
-
-#Add the sparkonda file to the cluster workers
+# # create a new conda env to test with if you don't have one:
+# # conda create -n sparkonda-test python pandas scikit-learn
+#
+# #Add the sparkonda file to the cluster workers
+"""
 sc.addPyFile('dev/sparkonda/sparkonda/sparkonda.py')
 
 import sparkonda as skon
@@ -41,7 +42,7 @@ sc.parallelize([1]).map(lambda x: x+1).collect()
 def d(x): import sklearn as sk; return sk.__version__
 
 sc.parallelize([1]).map(d).collect()
-
-
-
-
+"""
+#
+#
+#

@@ -2,12 +2,12 @@
 Sparkonda
 ===============================
 
-Minimalistic utility library to manage conda environments for pyspark jobs on yarn clusters.
+Minimalistic utility library to manage conda environments for PySpark jobs on yarn clusters.
 
 Features
 --------
 
-* Manage conda environments on pyspark executors to use specific
+* Manage conda environments on PySpark executors to use specific
   packages on the remote workers without involving admins to install needed software on hadoop cluster.
 
 Docs

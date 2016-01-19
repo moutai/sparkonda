@@ -4,10 +4,18 @@ sparkonda package
 Submodules
 ----------
 
-sparkonda.sparkonda module
---------------------------
+sparkonda.module_helper module
+------------------------------
 
-.. automodule:: sparkonda.sparkonda
+.. automodule:: sparkonda.module_helper
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+sparkonda.sparkonda_utils module
+--------------------------------
+
+.. automodule:: sparkonda.sparkonda_utils
     :members:
     :undoc-members:
     :show-inheritance:
