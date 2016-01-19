@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import subprocess
+import os.path
 
 """
 Name of the Conda environment to be used for the installation
@@ -39,7 +40,7 @@ def __unzip_conda_env(broadcast_vars, iterator):
     """
     import subprocess
 
-    #transform '/path/to/conda' to 'path'
+    # transform '/path/to/conda' to 'path'
     worker_conda_folder = __parse_worker_local_path(broadcast_vars['CONDA_ENV_LOCATION'])
 
     cmd = 'rm -rf %s' % worker_conda_folder
@@ -82,29 +83,43 @@ def __get_broadcast_vars():
                 SC_NUM_EXECUTORS=SC_NUM_EXECUTORS)
 
 
-def prun(sc, cmd):
+def prun(sc, cmd, include_broadcast_vars=True):
     """
     Run a function on all spark executors.
     The number of executors needs to be defined with SC_NUM_EXECUTORS
     """
-    from functools import partial
     num_workers = SC_NUM_EXECUTORS
-    broadcast_vars = sc.broadcast(__get_broadcast_vars())
-    return sc.parallelize(range(1))\
-        .repartition(num_workers)\
-        .mapPartitions(partial(cmd, broadcast_vars.value))\
-        .collect()
+    if include_broadcast_vars:
+        from functools import partial
+        broadcast_vars = sc.broadcast(__get_broadcast_vars())
+        return (sc.parallelize(range(1))
+                .repartition(num_workers)
+                .mapPartitions(partial(cmd, broadcast_vars.value))
+                .collect())
+    else:
+        return (sc.parallelize(range(1))
+                .repartition(num_workers)
+                .mapPartitions(cmd)
+                .collect())
 
 
-def zip_conda_env():
+def zip_conda_env(overwrite=True):
     """
     Zip the local conda env located at CONDA_ENV_LOCATION
     """
     conda_env_location = CONDA_ENV_LOCATION
-    subprocess.check_output(('zip -r /tmp/%s.zip %s'
-                             % (CONDA_ENV_NAME,
-                                conda_env_location))
-                            .split(' '))
+    if overwrite:
+        subprocess.check_output(('zip -r /tmp/%s.zip %s'
+                                 % (CONDA_ENV_NAME,
+                                    conda_env_location))
+                                .split(' '))
+    else:
+        if not os.path.exists('/tmp/%s.zip' % (CONDA_ENV_NAME)):
+            print('Zip does not exist, creating new zip file:')
+            subprocess.check_output(('zip -r /tmp/%s.zip %s'
+                                     % (CONDA_ENV_NAME,
+                                        conda_env_location))
+                                    .split(' '))
 
 
 def distribute_conda_env(sc):
@@ -139,7 +154,7 @@ def set_workers_python_interpreter(sc):
     """
     Set the interpreter for each executor given a sparkcontext
     """
-    sc.pythonExec = CONDA_ENV_LOCATION[1:]+"/bin/python2.7"
+    sc.pythonExec = CONDA_ENV_LOCATION[1:] + "/bin/python2.7"
 
 
 def reset_workers_python_interpreter(sc):
