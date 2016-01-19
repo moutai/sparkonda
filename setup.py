@@ -28,8 +28,8 @@ setup(
     description="Minimalistic utility library to manage conda environments for pyspark jobs on yarn clusters",
     long_description=readme + '\n\n' + history,
     author="Moussa Taifi",
-    author_email='@mtaifi',
-    url='https://github.com/mtaifi/sparkonda',
+    author_email='@moutai',
+    url='https://github.com/moutai/sparkonda',
     packages=[
         'sparkonda',
     ],
