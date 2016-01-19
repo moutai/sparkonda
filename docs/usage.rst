@@ -3,7 +3,6 @@ Usage
 ========
 
 Currently this uses the sparkcontext addPyFile method to ship this method to the workers.
-Additionally to prevent the interference of the initial import of sparkonda with pyspark cloudpickle, the user needs to
 
 
 To ship and install a conda environment the following steps are needed:
