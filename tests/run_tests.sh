@@ -7,5 +7,5 @@
 #export PYTHONPATH=path_to/sparkonda:$PYTHONPATH
 
 source activate sparkonda-test-env
-
+pwd
 nosetests -s --nologcapture

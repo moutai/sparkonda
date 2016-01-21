@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
-import subprocess
 import os
-import os.path
-import os
-import zipfile
-import shutil
+import tarfile
 import logging
+import subprocess
 
 from pyspark import SparkFiles
 
@@ -24,10 +21,13 @@ Number of Executors used for the Spark job
 """
 SC_NUM_EXECUTORS = 2
 
+"""Unpacking Error Level"""
+UNPACKING_ERROR_LEVEL = 0
 
 logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
 
 def __ls(broadcast_vars, iterator):
     """
@@ -43,36 +43,24 @@ def __parse_worker_local_path(path):
     return path[1:].split('/')[0]
 
 
-def __unzip_conda_env(broadcast_vars, iterator):
+def __unpack_conda_env(broadcast_vars, iterator):
     """
     Command to install the conda env in the local worker
     """
-
     # transform '/path/to/conda' to 'path'
-    try:
-        shutil.rmtree(broadcast_vars['CONDA_ENV_LOCATION'])
-    except:
-        # pass if a previous conda env does not exist
-        pass
+    worker_conda_folder = __parse_worker_local_path(broadcast_vars['CONDA_ENV_LOCATION'])
+    # delete existing unpacked env root 'path' folder
+    cmd = 'rm -rf %s' % worker_conda_folder
+    subprocess.check_output(cmd.split(' '))
 
-    conda_env_zip_file = '%s.zip' % broadcast_vars['CONDA_ENV_NAME']
+    # unpack the env
+    with tarfile.open(broadcast_vars['CONDA_ENV_NAME'] + '.tar') as tar_handle:
+        tar_handle.errorlevel = UNPACKING_ERROR_LEVEL
+        tar_handle.extractall()
 
-    with open(conda_env_zip_file, 'rb') as conda_env_zip_file_handle:
-        with zipfile.ZipFile(conda_env_zip_file_handle) as z:
-            for name in z.namelist():
-                # Extract in the current working directory
-                target = z.extract(name)
-                os.chmod(target, 777)
-
-    # import subprocess
-    # cmd = 'rm -rf %s' % worker_conda_folder
-    # subprocess.check_output(cmd.split(' '))
-
-    # cmd = 'unzip %s.zip' % broadcast_vars['CONDA_ENV_NAME']
-    # subprocess.check_output(cmd.split(' '))
-
-    # cmd = 'rm -rf %s.zip' % broadcast_vars['CONDA_ENV_NAME']
-    # subprocess.check_output(cmd.split(' '))
+    # remove the env tar file
+    cmd = 'rm -rf %s.tar' % broadcast_vars['CONDA_ENV_NAME']
+    subprocess.check_output(cmd.split(' '))
 
     return [__get_hostname(), 'done']
 
@@ -118,23 +106,13 @@ def __get_sc_executors_instances(sc):
     sc.getConf()
 
 
-def __create_conda_zip():
-    zip_full_path = '/tmp/%s.zip' % CONDA_ENV_NAME
-
-    with zipfile.ZipFile(zip_full_path, 'w') as zip_handle:
-        __zipdir(CONDA_ENV_LOCATION, zip_handle)
-
-    # subprocess.check_output(('zip -r /tmp/%s.zip %s'
-    #                          % (CONDA_ENV_NAME,
-    #                             CONDA_ENV_LOCATION))
-    #                         .split(' '))
-    return zip_full_path
-
-
-def __zipdir(path, zip_handle):
-    for root, dirs, files in os.walk(path):
-        for file in files:
-            zip_handle.write(os.path.join(root, file))
+def __tar_env():
+    """Untar the conda env tar file
+    """
+    with tarfile.open('/tmp/' + CONDA_ENV_NAME + '.tar', 'w') as tar_handle:
+        for root, dirs, files in os.walk(CONDA_ENV_LOCATION):
+            for cur_file in files:
+                tar_handle.add(os.path.join(root, cur_file))
 
 
 def prun(sc, cmd, include_broadcast_vars=True, debug=False):
@@ -160,26 +138,24 @@ def prun(sc, cmd, include_broadcast_vars=True, debug=False):
                 .collect())
 
 
-def zip_conda_env(overwrite=True):
+def pack_conda_env(overwrite=True):
     """
-    Zip the local conda env located at CONDA_ENV_LOCATION
+    Pack the local conda env located at CONDA_ENV_LOCATION
     """
     if overwrite:
-        zip_location = __create_conda_zip()
+        print('Overwriting tar file if exists at:' + '/tmp/' + CONDA_ENV_NAME + '.tar')
+        __tar_env()
     else:
-        if not os.path.exists('/tmp/%s.zip' % (CONDA_ENV_NAME)):
-            logger.debug('Zip does not exist, creating new zip file...')
-            zip_location = __create_conda_zip()
-        else:
-            zip_location = None
-    return zip_location
+        if not os.path.exists('/tmp/%s.tar' % CONDA_ENV_NAME):
+            print('Tar file does not exist, creating new tar file at:' + '/tmp/' + CONDA_ENV_NAME + '.tar')
+            __tar_env()
 
 
 def distribute_conda_env(sc):
     """
-    Distributes the conda env in zip format given a sparkcontext
+    Distributes the conda env in tar format given a sparkcontext
     """
-    return sc.addFile('/tmp/%s.zip' % CONDA_ENV_NAME)
+    return sc.addFile('/tmp/%s.tar' % CONDA_ENV_NAME)
 
 
 def list_cwd_files(sc, debug=False):
@@ -192,9 +168,9 @@ def list_cwd_files(sc, debug=False):
 
 def install_conda_env(sc):
     """
-    Unzip and install the conda zip file in each executor given a sparkcontext
+    Unpack and install the conda package file in each executor given a sparkcontext
     """
-    return prun(sc, __unzip_conda_env)
+    return prun(sc, __unpack_conda_env)
 
 
 def remove_conda_env(sc):
@@ -208,6 +184,7 @@ def set_workers_python_interpreter(sc):
     """
     Set the interpreter for each executor given a sparkcontext
     """
+    # Remove the first path separator from the conda env location
     sc.pythonExec = CONDA_ENV_LOCATION[1:] + "/bin/python2.7"
 
 

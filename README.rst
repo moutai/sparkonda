@@ -13,4 +13,4 @@ Features
 Docs
 --------
 
-http://sparkonda.readthedocs.org/en/latest/index.html
+http://sparkonda.readthedocs.org
