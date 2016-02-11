@@ -62,8 +62,10 @@ To ship and install a conda environment the following steps are needed:
     skon.CONDA_ENV_NAME = 'sparkonda-test-env'
     # Edit this path to match your conda env location
     skon.CONDA_ENV_LOCATION = ''.join([home_dir,'/miniconda/envs/',skon.CONDA_ENV_NAME])
-    # Edit to match your cluster size
+    # Edit to match the number of spark workers
     skon.SC_NUM_EXECUTORS = 2
+    # Edit to match the number of cores per spark worker
+    skon.SC_NUM_CORE_PER_EXECUTOR = 2
 
     # Pack, ship, list worker dirs, install the conda env and set the workers python interpreter
     skon.pack_conda_env()

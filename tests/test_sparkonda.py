@@ -39,6 +39,10 @@ class SparkondaTestCase(unittest.TestCase):
         cls.spark_test_configs = configs
         # Create the spark context
         cls.sc = SparkContext(conf=conf)
+        if 'PYSPARK_DRIVER_PYTHON' in configs.keys():
+            cls.sc.pythonExec = configs['PYSPARK_DRIVER_PYTHON']
+        else:
+            cls.sc.pythonExec = 'python2.7'
 
         logger = cls.sc._jvm.org.apache.log4j
         logger.LogManager.getLogger("org").setLevel(logger.Level.ERROR)
@@ -61,66 +65,81 @@ class SparkondaTestCase(unittest.TestCase):
         assert_true(self.sc.range(10).count() == 10, 'sc.range(10).count() should return 10')
 
     def test_02_adding_sparkonda_utils_file_to_workers(self):
+        from os.path import expanduser
+        home_dir = expanduser("~")
         self.logger.debug("Running test_02_adding_sparkonda_utils_file_to_workers")
         sparkonda_utils_filename = self.add_sparkonda_utils_to_workers()
-        assert_true('sparkonda' not in sys.modules.keys(), 'sparkonda should be cleaned from the sys.modules cache')
+        self.logger.debug('sparkonda_utils_filename: %s', sparkonda_utils_filename)
+        assert_true('sparkonda' not in sys.modules.keys(),
+                    'sparkonda should be cleaned from the sys.modules cache')
         assert_true('sparkonda.module_helper' not in sys.modules.keys(),
                     'sparkonda should be cleaned from the sys.modules cache')
 
         skon = self.import_sparkonda_utils()
         self.logger.debug("self.spark_test_configs['spark.executor.instances']: %s"
                           % str(self.spark_test_configs['spark.executor.instances']))
+        self.logger.debug("self.spark_test_configs['spark.executor.cores']: %s"
+                          % str(self.spark_test_configs['spark.executor.cores']))
 
         skon.SC_NUM_EXECUTORS = int(self.spark_test_configs['spark.executor.instances'])
+        skon.SC_NUM_CORES_PER_EXECUTOR = int(self.spark_test_configs['spark.executor.cores'])
+        skon.CONDA_ENV_NAME = 'sparkonda-test-env'
+        skon.CONDA_ENV_LOCATION = ''.join([home_dir, '/miniconda/envs/', skon.CONDA_ENV_NAME])
 
         file_list = skon.list_cwd_files(self.sc, debug=True)
-        assert_true(sparkonda_utils_filename in file_list,
+        self.logger.debug('file_list: %s' % str(file_list))
+        assert_true(sparkonda_utils_filename in str(file_list),
                     ' '.join([sparkonda_utils_filename, ' should be in workers directories']))
 
-    def test_03_zip_conda_env_on_the_spark_driver(self):
-        self.logger.debug("Running test_03_zip_conda_env_on_the_spark_driver")
+    def test_03_pack_conda_env_on_the_spark_driver(self):
+        self.logger.debug("Running test_03_pack_conda_env_on_the_spark_driver")
         skon = self.init_sparkonda()
+        skon.pack_conda_env(overwrite=True)
 
-        zip_location = skon.zip_conda_env(overwrite=True)
-        assert_true(zip_location is not None, 'Zip file location should not be None')
-        assert_true('/tmp/' in zip_location, 'Zip file location should be in the /tmp directory')
+        pack_location = '/tmp/' + skon.CONDA_ENV_NAME + '.tar'
+        assert_true(pack_location is not None, 'Pack file location should not be None')
+        assert_true('/tmp/' in pack_location, 'Pack file location should be in the /tmp directory')
 
-        zip_location = skon.zip_conda_env(overwrite=False)
-        assert_equal(zip_location, None, 'Zip file location should be None, if it already exist')
+        pack_location = skon.pack_conda_env(overwrite=False)
+        assert_equal(pack_location, None, 'Pack file location should be None, if it already exist')
 
     def test_04_distribute_conda_env_on_the_spark_workers(self):
         self.logger.debug("Running test_04_distribute_conda_env_on_the_spark_workers")
         skon = self.init_sparkonda()
-        zip_file_location = skon.zip_conda_env(overwrite=True)
+        skon.pack_conda_env(overwrite=True)
+        pack_file_location = '/tmp/' + skon.CONDA_ENV_NAME + '.tar'
         skon.distribute_conda_env(self.sc)
         workers_files = skon.list_cwd_files(self.sc)
         self.logger.debug('workers_files:%s' % str(workers_files))
-        zip_file_name = os.path.split(zip_file_location)[-1]
+        pack_file_name = os.path.split(pack_file_location)[-1]
         count_files = 0
-        for f in workers_files:
-            if zip_file_name == f:
-                count_files += 1
+        for fh in workers_files:
+            for f in fh:
+                if pack_file_name == f:
+                    count_files += 1
         self.logger.debug(
             'count_files, int(skon.SC_NUM_EXECUTORS): %s' % str([count_files, int(skon.SC_NUM_EXECUTORS)]))
         assert_equal(count_files, int(skon.SC_NUM_EXECUTORS),
-                     'Number of zip files should be equal to the executors count')
+                     'Number of pack files should be equal to the executors count')
 
     def test_05_install_conda_env_on_the_spark_workers(self):
         self.logger.debug("Running test_05_install_conda_env_on_the_spark_workers")
         skon = self.init_sparkonda()
-        zip_file_location = skon.zip_conda_env(overwrite=True)
+        skon.pack_conda_env(overwrite=True)
+        pack_file_location = '/tmp/' + skon.CONDA_ENV_NAME + '.tar'
         skon.distribute_conda_env(self.sc)
         workers_files = skon.list_cwd_files(self.sc)
-        self.logger.debug('Before unzip workers_files:%s' % str(workers_files))
+        self.logger.debug('Before unpack workers_files:%s' % str(workers_files))
         skon.install_conda_env(self.sc)
         workers_files = skon.list_cwd_files(self.sc)
-        self.logger.debug('After unzip workers_files:%s' % str(workers_files))
+        self.logger.debug('After unpack workers_files:%s' % str(workers_files))
         self.logger.debug('Looking for top level folder in workers_files:%s' % skon.CONDA_ENV_LOCATION)
         top_level_conda_env_location = skon.CONDA_ENV_LOCATION.split('/')[1]
         count_files = 0
-        for f in workers_files:
-            if top_level_conda_env_location == f:
-                count_files += 1
+        for fh in workers_files:
+            for f in fh:
+                if top_level_conda_env_location == f:
+                    count_files += 1
         self.logger.debug(
             'count_files, int(skon.SC_NUM_EXECUTORS): %s' % str([count_files, int(skon.SC_NUM_EXECUTORS)]))
         assert_equal(count_files, int(skon.SC_NUM_EXECUTORS),
@@ -129,7 +148,7 @@ class SparkondaTestCase(unittest.TestCase):
     def test_06_conda_installed_python_on_the_spark_workers(self):
         self.logger.debug("Running test_06_conda_installed_python_on_the_spark_workers")
         skon = self.init_sparkonda()
-        skon.zip_conda_env(overwrite=True)
+        skon.pack_conda_env(overwrite=True)
         skon.distribute_conda_env(self.sc)
         skon.install_conda_env(self.sc)
         workers_files = skon.list_cwd_files(self.sc, debug=True)
@@ -157,6 +176,16 @@ class SparkondaTestCase(unittest.TestCase):
         assert_equal(len(sklearn_versions), int(skon.SC_NUM_EXECUTORS),
                      'Number of responses should be equal to the executors count')
 
+
+    def test_07_num_executors_match_num_hosts_returned_from_prun(self):
+        self.logger.debug("Running test_07_num_executors_match_num_hosts_returned_from_prun")
+        skon = self.init_sparkonda()
+        workers_files = skon.list_cwd_files(self.sc, debug=True)
+        num_hosts = len(set(workers_files[::2]))
+        assert_equal(num_hosts, int(skon.SC_NUM_EXECUTORS),
+                     'Number of hosts should be equal to the executors count')
+
+
     def add_sparkonda_utils_to_workers(self):
         # Helper to add sparkonda_utils module to the workers
         # and clean up the sys.modules cache afterward
@@ -178,6 +207,7 @@ class SparkondaTestCase(unittest.TestCase):
         self.add_sparkonda_utils_to_workers()
         skon = self.import_sparkonda_utils()
         skon.SC_NUM_EXECUTORS = int(self.spark_test_configs['spark.executor.instances'])
+        skon.SC_NUM_CORE_PER_EXECUTOR = int(self.spark_test_configs['spark.executor.cores'])
         skon.CONDA_ENV_NAME = 'sparkonda-test-env'
         skon.CONDA_ENV_LOCATION = ''.join([home_dir, '/miniconda/envs/', skon.CONDA_ENV_NAME])
         return skon

@@ -21,6 +21,11 @@ Number of Executors used for the Spark job
 """
 SC_NUM_EXECUTORS = 2
 
+"""
+Number of Cores per Executor used for the Spark job
+"""
+SC_NUM_CORES_PER_EXECUTOR = 2
+
 """Unpacking Error Level"""
 UNPACKING_ERROR_LEVEL = 0
 
@@ -33,7 +38,7 @@ def __ls(broadcast_vars, iterator):
     """
     Get the list of files in the worker-local directory
     """
-    return os.listdir(SparkFiles.getRootDirectory())
+    return [__get_hostname(), os.listdir(SparkFiles.getRootDirectory())]
 
 
 def __parse_worker_local_path(path):
@@ -72,8 +77,10 @@ def __rm_conda_env(broadcast_vars, iterator):
     import subprocess
     worker_conda_folder = __parse_worker_local_path(broadcast_vars['CONDA_ENV_LOCATION'])
 
-    cmd = 'rm -rf %s' % worker_conda_folder
-    return [subprocess.check_output(cmd.split(' '))]
+    rm_conda_cmd = 'rm -rf %s' % worker_conda_folder
+    rm_conda_zip = 'rm -rf %s.tar' % broadcast_vars['CONDA_ENV_NAME']
+    return [subprocess.check_output(rm_conda_cmd.split(' ')),
+            subprocess.check_output(rm_conda_zip.split(' '))]
 
 
 def __get_hostname():
@@ -121,18 +128,19 @@ def prun(sc, cmd, include_broadcast_vars=True, debug=False):
     The number of executors needs to be defined with SC_NUM_EXECUTORS
     """
     num_workers = SC_NUM_EXECUTORS
+    num_cores_per_worker = SC_NUM_CORES_PER_EXECUTOR
     if debug:
         logger.debug('Number of executors/partitions:' + str(SC_NUM_EXECUTORS))
 
     if include_broadcast_vars:
         from functools import partial
         broadcast_vars = sc.broadcast(__get_broadcast_vars())
-        return (sc.parallelize(range(1))
+        return (sc.parallelize(range(num_workers*num_cores_per_worker))
                 .repartition(num_workers)
                 .mapPartitions(partial(cmd, broadcast_vars.value))
                 .collect())
     else:
-        return (sc.parallelize(range(1))
+        return (sc.parallelize(range(num_workers*num_cores_per_worker))
                 .repartition(num_workers)
                 .mapPartitions(cmd)
                 .collect())
