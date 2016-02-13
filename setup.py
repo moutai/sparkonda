@@ -24,7 +24,7 @@ test_requirements = [
 
 setup(
     name='sparkonda',
-    version='0.2.1',
+    version='0.2.2',
     description="Minimalistic utility library to manage conda environments for pyspark jobs on yarn clusters",
     long_description=readme + '\n\n' + history,
     author="Moussa Taifi",

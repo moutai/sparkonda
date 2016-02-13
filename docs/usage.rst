@@ -79,7 +79,7 @@ To ship and install a conda environment the following steps are needed:
     def check_pandas(x): import pandas as pd; return [pd.__version__]
     skon.prun(sc, check_pandas, include_broadcast_vars=False)
 
-    def check_sklearn(x): import sklearn as sk; return sk.__version__
+    def check_sklearn(x): import sklearn as sk; return [sk.__version__]
     skon.prun(sc, check_sklearn, include_broadcast_vars=False)
 
 To remove the custom conda env from the workers and reset the interpreter:
@@ -95,5 +95,5 @@ To remove the custom conda env from the workers and reset the interpreter:
     # Check that the package is not accessible anymore
     # User should get an ImportErrror:
     #   ImportError: No module named sklearn
-    def check_sklearn(x): import sklearn as sk; return sk.__version__
+    def check_sklearn(x): import sklearn as sk; return [sk.__version__]
     skon.prun(sc, check_sklearn, include_broadcast_vars=False)

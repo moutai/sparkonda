@@ -1,8 +1,16 @@
 ============
 Installation
 ============
-From source:
 
+
+From PyPi:
+
+.. code-block:: python
+
+    pip install sparkonda
+
+
+From source:
 Download the repo and install in a fresh environment
 
 .. code-block:: python
@@ -13,8 +21,3 @@ Download the repo and install in a fresh environment
     python setup.py install
 
 
-From PyPi:
-
-.. code-block:: python
-
-    pip install sparkonda
